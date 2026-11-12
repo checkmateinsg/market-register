@@ -380,6 +380,14 @@ function migrate(s){
     }
     s.patch4=true;
   }
+  // one-time update (Nov 12 #5): remove Sampler, add Cookie & Bread Bundle. Never touches sales.
+  if(!s.patch5){
+    s.deals=s.deals.filter(function(d){return d.name!=='Sampler';});
+    var cId=null,bId=null;s.products.forEach(function(p){if(/cookie/i.test(p.name))cId=p.id;if(/banana/i.test(p.name))bId=p.id;});
+    if(cId&&bId&&!s.deals.some(function(d){return d.name==='Cookie & Bread Bundle';}))
+      s.deals.push({id:'d_bundle4',type:'set',name:'Cookie & Bread Bundle',items:[{pid:cId,qty:1},{pid:bId,qty:1}],price:{reg:900,hh:null}});
+    s.patch5=true;
+  }
   s.v=2;
   return s;
 }
@@ -524,7 +532,20 @@ function hints(pr){
     var have=state.cart[p.id]||0; if(p.stock<have+1)return;
     var c2={};for(var k in state.cart)c2[k]=state.cart[k];c2[p.id]=have+1;
     var t2=priceCart(c2).total, delta=t2-pr.total, s=single(p);
-    if(s-delta>=50)out.push({pid:p.id,name:p.name,delta:delta,save:s-delta});
+    if(s-delta>=50){
+      var bname=null;   // name the bundle this item completes, if any
+      state.deals.forEach(function(d){
+        if(bname||d.type!=='set'||!d.name)return;
+        var needs=false,okAfter=true,okBefore=true;
+        d.items.forEach(function(it){
+          if(it.pid===p.id)needs=true;
+          if((c2[it.pid]||0)<it.qty)okAfter=false;
+          if((state.cart[it.pid]||0)<it.qty)okBefore=false;
+        });
+        if(needs&&okAfter&&!okBefore)bname=d.name;
+      });
+      out.push({pid:p.id,name:p.name,delta:delta,save:s-delta,have:have,bundle:bname});
+    }
   });
   out.sort(function(a,b){return b.save-a.save;});
   return out.slice(0,2);
@@ -752,7 +773,8 @@ function viewRegister(){
       '<div class="pl"><span>'+l.qty+' &times; '+esc(l.name)+' (single)</span><span>'+money(l.amount)+'</span></div>';}).join('');
   var adjLine=(fin.adj&&fin.given>0)?'<div class="pl adj"><span>Adjustment ('+esc(fin.adj.reason)+')</span><span>-'+money(fin.given)+'</span></div>':'';
   var hs=hints(pr).map(function(h){
-    return '<div class="hint">Add 1 more '+esc(h.name)+' for just +'+money(h.delta)+' (saves '+money(h.save)+')<br><button data-act="inc" data-id="'+h.pid+'">Add it</button></div>';}).join('');
+    var lead=h.bundle?'Add '+esc(h.name)+' to make it a <b>'+esc(h.bundle)+'</b>':'Add '+(h.have?'1 more ':'')+esc(h.name);
+    return '<div class="hint">'+lead+' for just +'+money(h.delta)+' (saves '+money(h.save)+')<br><button data-act="inc" data-id="'+h.pid+'">Add it</button></div>';}).join('');
   var empty=!cartCount();
   var pay=['Cash','Card','Other'].map(function(m){return '<button class="'+(state.pay===m?'on':'')+'" data-act="pay" data-m="'+m+'">'+(m==='Card'?'Card (Square)':m)+'</button>';}).join('');
   var cardBox=(state.pay==='Card'&&!empty&&fin.total>0)?'<div class="cardbox">Charge <b>'+money(fin.total)+'</b> in Square (Keypad), wait for approval, then tap Complete Sale.'+
