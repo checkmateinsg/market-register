@@ -495,6 +495,17 @@ function migrate(s){
     });
     s.patch18=true;
   }
+  // one-time update (Nov 12 #19): names and order match the printed sheets. Never touches sales.
+  if(!s.patch19){
+    var REN={p_cookie:'Chocolate Chip Cookies',p_butter:'Salted Butter',p_bm:'Buttermilk',p_vs:'Vanilla Sugar',p_shot:'Wellness Shot',p_banana:'Banana Bread',p_season:'Homemade Seasoning',p_popper:'Cranberry Poppers',p_catnip:'Catnip Toys'};
+    var PORD=['p_cookie','p_butter','p_bm','p_vs','p_shot','p_banana','p_season','p_popper','p_catnip'];
+    s.products.forEach(function(p){if(REN[p.id])p.name=REN[p.id];});
+    var rank=function(arr,x){var i=arr.indexOf(x);return i<0?999:i;};
+    s.products.sort(function(a,b){return rank(PORD,a.id)-rank(PORD,b.id);});
+    var DORD=['Breakfast Bundle',"Baker's Bundle",'Kitchen Pantry','Dessert Trio','Afternoon Treat','Sweet Tooth'];
+    s.deals.sort(function(a,b){return rank(DORD,a.name)-rank(DORD,b.name);});
+    s.patch19=true;
+  }
   s.v=2;
   return s;
 }
