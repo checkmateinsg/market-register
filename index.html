@@ -311,6 +311,29 @@ function migrate(s){
   if(s.pin===undefined)s.pin=null;
   if(s.hhStart===undefined)s.hhStart='';
   if(s.hhDismissDay===undefined)s.hhDismissDay=null;
+  // one-time price/item update (Nov 12): shots $5 / 3 for $12, seasoning $2, banana bread. Never touches sales.
+  if(!s.patch1){
+    var byName=function(re){for(var k=0;k<s.products.length;k++){if(re.test(s.products[k].name))return s.products[k];}return null;};
+    var shot=byName(/shot/i);
+    if(shot){
+      shot.price={reg:500,hh:350};
+      s.deals=s.deals.filter(function(d){
+        if(d.type!=='set'||d.items.length!==1||d.items[0].pid!==shot.id)return true;
+        return d.items[0].qty===3;   // shots: single or 3, no in-between
+      });
+      var has3=false;
+      s.deals.forEach(function(d){if(d.type==='set'&&d.items.length===1&&d.items[0].pid===shot.id){d.price={reg:1200,hh:900};has3=true;}});
+      if(!has3)s.deals.push({id:'d_shot3',type:'set',name:'',items:[{pid:shot.id,qty:3}],price:{reg:1200,hh:900}});
+    }
+    var bb=byName(/banana/i);
+    if(!bb){bb={id:'p_banana',name:'Banana Bread (mini)',section:'Baked',stock:16,price:{reg:400,hh:275},color:COLORS[s.products.length%COLORS.length]};s.products.push(bb);}
+    var hasBB=s.deals.some(function(d){return d.type==='set'&&d.items.length===1&&d.items[0].pid===bb.id;});
+    if(!hasBB)s.deals.push({id:'d_banana3',type:'set',name:'',items:[{pid:bb.id,qty:3}],price:{reg:1000,hh:null}});
+    var se=byName(/season/i);
+    if(se){se.price={reg:200,hh:150};}
+    else s.products.push({id:'p_season',name:'Seasoning Packet',section:'Pantry',stock:12,price:{reg:200,hh:150},color:COLORS[s.products.length%COLORS.length]});
+    s.patch1=true;
+  }
   s.v=2;
   return s;
 }
