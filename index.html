@@ -465,6 +465,18 @@ function migrate(s){
     s.deals.forEach(function(d){if(d.name==='Breakfast Bundle')d.price.reg=1400;if(d.name==='Afternoon Treat')d.price.reg=1000;});
     s.patch15=true;
   }
+  // one-time update (Nov 12 #16): Breakfast $13; Cookie & Bread adds vanilla sugar at $14. Never touches sales.
+  if(!s.patch16){
+    var vs=null;s.products.forEach(function(p){if(/vanilla/i.test(p.name))vs=p;});
+    s.deals.forEach(function(d){
+      if(d.name==='Breakfast Bundle')d.price.reg=1300;
+      if(d.name==='Cookie & Bread Bundle'&&vs){
+        if(!d.items.some(function(it){return it.pid===vs.id;}))d.items.push({pid:vs.id,qty:1});
+        d.price.reg=1400;
+      }
+    });
+    s.patch16=true;
+  }
   s.v=2;
   return s;
 }
