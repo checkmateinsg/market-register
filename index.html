@@ -506,6 +506,13 @@ function migrate(s){
     s.deals.sort(function(a,b){return rank(DORD,a.name)-rank(DORD,b.name);});
     s.patch19=true;
   }
+  // one-time update (Nov 12 #20): happy hour = perishables only (cookies/butter/shots $3, buttermilk $2); everything else and bundles stay full price. Never touches sales.
+  if(!s.patch20){
+    var HH={p_cookie:300,p_butter:300,p_shot:300,p_bm:200};
+    s.products.forEach(function(p){p.price.hh=(HH[p.id]!=null)?HH[p.id]:null;});
+    s.deals.forEach(function(d){if(d.name)d.price.hh=d.price.reg;});
+    s.patch20=true;
+  }
   s.v=2;
   return s;
 }
