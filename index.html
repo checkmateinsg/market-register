@@ -423,6 +423,17 @@ function migrate(s){
     s.deals.forEach(function(d){if(d.name&&BP[d.name]!=null)d.price.reg=BP[d.name];});
     s.patch8=true;
   }
+  // one-time update (Nov 12 #9): catnip toys, 42 at $5 / 2 for $9 / 3 for $13. Never touches sales.
+  if(!s.patch9){
+    var cn=null;s.products.forEach(function(p){if(/catnip/i.test(p.name))cn=p;});
+    if(!cn){cn={id:'p_catnip',name:'Catnip Toy',section:'Pets',stock:42,price:{reg:500,hh:null},color:COLORS[s.products.length%COLORS.length]};s.products.push(cn);}
+    else cn.price.reg=500;
+    [[2,900],[3,1300]].forEach(function(q){
+      var ex=s.deals.filter(function(d){return d.type==='set'&&d.items.length===1&&d.items[0].pid===cn.id&&d.items[0].qty===q[0];})[0];
+      if(ex)ex.price.reg=q[1];else s.deals.push({id:'d_catnip'+q[0],type:'set',name:'',items:[{pid:cn.id,qty:q[0]}],price:{reg:q[1],hh:null}});
+    });
+    s.patch9=true;
+  }
   s.v=2;
   return s;
 }
