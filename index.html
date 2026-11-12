@@ -454,6 +454,12 @@ function migrate(s){
     s.products.forEach(function(p){if(/cranberr|popper/i.test(p.name))p.price.reg=300;});
     s.patch13=true;
   }
+  // one-time update (Nov 12 #14): wellness shot $4; Breakfast $13, Afternoon Treat $9 (still save $2). Never touches sales.
+  if(!s.patch14){
+    s.products.forEach(function(p){if(/shot/i.test(p.name))p.price.reg=400;});
+    s.deals.forEach(function(d){if(d.name==='Breakfast Bundle')d.price.reg=1300;if(d.name==='Afternoon Treat')d.price.reg=900;});
+    s.patch14=true;
+  }
   s.v=2;
   return s;
 }
