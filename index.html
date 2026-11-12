@@ -334,6 +334,24 @@ function migrate(s){
     else s.products.push({id:'p_season',name:'Seasoning Packet',section:'Pantry',stock:12,price:{reg:200,hh:150},color:COLORS[s.products.length%COLORS.length]});
     s.patch1=true;
   }
+  // one-time update (Nov 12 #2): cookies $5, banana bread $6 / 2 for $10 / 3 for $14, cranberry poppers added. Never touches sales.
+  if(!s.patch2){
+    var byName2=function(re){for(var k=0;k<s.products.length;k++){if(re.test(s.products[k].name))return s.products[k];}return null;};
+    var ck=byName2(/cookie/i);if(ck)ck.price.reg=500;
+    var bb2=byName2(/banana/i);
+    if(bb2){
+      bb2.price.reg=600;
+      s.deals=s.deals.filter(function(d){return !(d.type==='set'&&d.items.length===1&&d.items[0].pid===bb2.id);});
+      s.deals.push({id:'d_banana2',type:'set',name:'',items:[{pid:bb2.id,qty:2}],price:{reg:1000,hh:null}});
+      s.deals.push({id:'d_banana3b',type:'set',name:'',items:[{pid:bb2.id,qty:3}],price:{reg:1400,hh:null}});
+    }
+    var pop=byName2(/cranberr|popper/i);
+    if(!pop){pop={id:'p_popper',name:'Cranberry Poppers',section:'Baked',stock:24,price:{reg:200,hh:null},color:COLORS[s.products.length%COLORS.length]};s.products.push(pop);}
+    else pop.price.reg=200;
+    var hasP=s.deals.some(function(d){return d.type==='set'&&d.items.length===1&&d.items[0].pid===pop.id;});
+    if(!hasP)s.deals.push({id:'d_popper3',type:'set',name:'',items:[{pid:pop.id,qty:3}],price:{reg:500,hh:null}});
+    s.patch2=true;
+  }
   s.v=2;
   return s;
 }
