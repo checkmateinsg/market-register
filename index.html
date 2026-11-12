@@ -417,6 +417,12 @@ function migrate(s){
     });
     s.patch7=true;
   }
+  // one-time update (Nov 12 #8): 3-item bundles +$1 (each saves $2). Never touches sales.
+  if(!s.patch8){
+    var BP={'Breakfast Bundle':1400,"Baker's Bundle":1300,'Kitchen Pantry':1200,'Sweet Tooth':1100,'Afternoon Treat':1100};
+    s.deals.forEach(function(d){if(d.name&&BP[d.name]!=null)d.price.reg=BP[d.name];});
+    s.patch8=true;
+  }
   s.v=2;
   return s;
 }
