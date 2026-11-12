@@ -439,6 +439,11 @@ function migrate(s){
     s.deals=s.deals.filter(function(d){return !((d.type||'set')==='set'&&d.items&&d.items.length===1);});
     s.patch10=true;
   }
+  // one-time update (Nov 12 #11): catnip toys $6. Never touches sales.
+  if(!s.patch11){
+    s.products.forEach(function(p){if(/catnip/i.test(p.name))p.price.reg=600;});
+    s.patch11=true;
+  }
   s.v=2;
   return s;
 }
