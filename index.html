@@ -67,6 +67,13 @@ main{flex:1;min-height:0;overflow:auto;-webkit-overflow-scrolling:touch}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:2px}
 .chip{background:#f3ece1;border:1px solid var(--line);border-radius:999px;padding:6px 10px;font-size:13px;font-weight:700}
 .chip:active{background:#e8dccb}
+.tdeals{font-size:12px;font-weight:700;color:var(--muted,#7a6a5a);margin-top:2px}
+.picklist{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.pickopt{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;padding:16px 16px;border-radius:12px;border:1px solid var(--line);background:#faf7f2;font-size:18px;font-weight:700;text-align:left}
+.pickopt:active{background:#e8dccb}
+.pickopt small{display:block;font-size:13px;font-weight:500;opacity:.75;margin-top:2px}
+.pickopt.bun{background:#eef7f1;border-color:#bfe0cb}
+.pickopt.dis{opacity:.4}
 .stock{margin-top:auto;font-size:13px;color:var(--muted);font-weight:600}
 .stock.low{color:var(--warn)}
 .qtybadge{position:absolute;top:8px;right:8px;background:var(--accent);color:#fff;min-width:30px;height:30px;border-radius:15px;
@@ -115,7 +122,7 @@ h3.sec{margin:18px 2px 8px;font-size:14px;letter-spacing:.8px;text-transform:upp
 .total{display:flex;justify-content:space-between;align-items:baseline;font-size:30px;font-weight:900;margin-bottom:8px}
 .total small{font-size:14px;font-weight:600;color:var(--ok)}
 .total small.am{color:var(--amber)}
-.pay{display:flex;gap:6px;margin-bottom:10px}
+.pay{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px}
 .pay button{flex:1;padding:10px 0;border-radius:10px;border:1px solid var(--line);background:#faf7f2;font-weight:700}
 .pay button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
 .btnrow{display:flex;gap:8px}
@@ -387,6 +394,16 @@ function migrate(s){
     if(cId&&bId&&!s.deals.some(function(d){return d.name==='Cookie & Bread Bundle';}))
       s.deals.push({id:'d_bundle4',type:'set',name:'Cookie & Bread Bundle',items:[{pid:cId,qty:1},{pid:bId,qty:1}],price:{reg:900,hh:null}});
     s.patch5=true;
+  }
+  // one-time update (Nov 12 #6): Kitchen Pantry and Sweet Tooth bundles. Never touches sales.
+  if(!s.patch6){
+    var pid6=function(re){for(var k=0;k<s.products.length;k++){if(re.test(s.products[k].name))return s.products[k].id;}return null;};
+    [['Kitchen Pantry',[/^butter/i,/vanilla/i,/season/i],1100,'d_bundle5'],['Sweet Tooth',[/cookie/i,/banana/i,/cranberr|popper/i],1000,'d_bundle6']].forEach(function(x){
+      var ids=x[1].map(pid6);if(ids.some(function(v){return !v;}))return;
+      if(s.deals.some(function(d){return d.name===x[0];}))return;
+      s.deals.push({id:x[3],type:'set',name:x[0],items:ids.map(function(v){return {pid:v,qty:1};}),price:{reg:x[2],hh:null}});
+    });
+    s.patch6=true;
   }
   s.v=2;
   return s;
@@ -744,9 +761,9 @@ function viewRegister(){
     var q=state.cart[p.id]||0,left=p.stock-q;
     var chips=state.deals.filter(function(d){return (d.type||'set')==='set'&&d.price[mode]!=null&&d.items.length===1&&d.items[0].pid===p.id;}).map(function(d){
       return '<span class="chip" data-act="addn" data-id="'+p.id+'" data-n="'+d.items[0].qty+'">'+esc(dealLabel(d,mode))+'</span>';}).join('');
-    return '<div class="tile '+(left<=0?'out':'')+'" style="--c:'+p.color+'" data-act="add" data-id="'+p.id+'">'+
+    return '<div class="tile '+(left<=0?'out':'')+'" style="--c:'+p.color+'" data-act="pick" data-id="'+p.id+'">'+
       '<span class="tn">'+esc(p.name)+'</span><span class="tp">'+money(single(p))+'</span>'+
-      (chips?'<div class="chips">'+chips+'</div>':'')+
+      (chips?'<div class="tdeals">'+state.deals.filter(function(d){return (d.type||'set')==='set'&&d.price[mode]!=null&&d.items.length===1&&d.items[0].pid===p.id;}).map(function(d){return esc(dealLabel(d,mode));}).join(' &middot; ')+'</div>':'')+
       '<span class="stock '+(left<=3?'low':'')+'">'+(left<=0?'Sold out':left+' left')+'</span>'+
       (q?'<span class="qtybadge">'+q+'</span>':'')+'</div>';
   }
@@ -776,10 +793,11 @@ function viewRegister(){
     var lead=h.bundle?'Add '+esc(h.name)+' to make it a <b>'+esc(h.bundle)+'</b>':'Add '+(h.have?'1 more ':'')+esc(h.name);
     return '<div class="hint">'+lead+' for just +'+money(h.delta)+' (saves '+money(h.save)+')<br><button data-act="inc" data-id="'+h.pid+'">Add it</button></div>';}).join('');
   var empty=!cartCount();
-  var pay=['Cash','Card','Other'].map(function(m){return '<button class="'+(state.pay===m?'on':'')+'" data-act="pay" data-m="'+m+'">'+(m==='Card'?'Card (Square)':m)+'</button>';}).join('');
+  var pay=['Cash','Card','Zelle','Cash App','Venmo','Other'].map(function(m){return '<button class="'+(state.pay===m?'on':'')+'" data-act="pay" data-m="'+m+'">'+(m==='Card'?'Card (Square)':m)+'</button>';}).join('');
   var cardBox=(state.pay==='Card'&&!empty&&fin.total>0)?'<div class="cardbox">Charge <b>'+money(fin.total)+'</b> in Square (Keypad), wait for approval, then tap Complete Sale.'+
     '<button data-act="sqoff" class="'+(state.sqOffline?'on':'')+'">Square offline: '+(state.sqOffline?'YES':'NO')+'</button></div>':'';
   var cashBox=(state.pay==='Cash'&&!empty&&fin.total>0)?tenderBlock(fin.total):'';
+  if(/^(Zelle|Cash App|Venmo)$/.test(state.pay)&&!empty&&fin.total>0)cashBox='<div class="cardbox">Have them send <b>'+money(fin.total)+'</b> by '+esc(state.pay)+'. Check it arrived, then tap Complete Sale.</div>';
   var dr=cashExpectedToday();
   var drawer='<div class="drawer" data-act="opensheet" data-s="start"><div>Cash drawer now: '+money(dr.expected)+'</div><span>start '+money(dr.start)+' + cash sales '+money(dr.sales)+' &middot; tap to set start</span></div>';
   return '<div class="register"><div class="left">'+drawer+
@@ -941,6 +959,21 @@ function renderSheet(){
       (d.type!=='comp'?'<div class="lbl">'+(d.type==='total'?'New total $':'Amount off $')+'</div><input class="amt" inputmode="decimal" data-f="adjamt" value="'+esc(d.amt||'')+'">':'')+
       '<div class="lbl">Reason (required)</div><div class="opts">'+REASONS.map(function(r){return '<button class="'+(d.reason===r?'on':'')+'" data-act="adjreason" data-v="'+r+'">'+r+'</button>';}).join('')+'</div>'+
       '<div class="btnrow" style="margin-top:16px"><button class="ghost" data-act="sheetclose">Cancel</button>'+(ui.adj?'<button class="ghost" data-act="adjremove">Remove</button>':'')+'<button class="big" data-act="adjapply">Apply</button></div>';
+  }else if(ui.sheet==='pick'){
+    var pp=prod(ui.pickId),md=state.mode;
+    if(!pp){ui.sheet=null;s.style.display='none';return;}
+    var inCart=state.cart[pp.id]||0,avail=pp.stock-inCart;
+    var opt=function(n,label,price){var dis=n>avail;
+      return '<button class="pickopt'+(dis?' dis':'')+'" '+(dis?'disabled':'data-act="pickadd" data-id="'+pp.id+'" data-n="'+n+'"')+'><span>'+label+'</span><b>'+money(price)+'</b></button>';};
+    var rows=opt(1,'1 '+esc(pp.name),single(pp));
+    state.deals.filter(function(d){return (d.type||'set')==='set'&&d.price[md]!=null&&d.items.length===1&&d.items[0].pid===pp.id;})
+      .sort(function(a,b){return a.items[0].qty-b.items[0].qty;})
+      .forEach(function(d){rows+=opt(d.items[0].qty,d.items[0].qty+' for '+moneyShort(d.price[md]),d.price[md]);});
+    var bun=state.deals.filter(function(d){return (d.type||'set')==='set'&&d.name&&d.price[md]!=null&&d.items.length>1&&d.items.some(function(it){return it.pid===pp.id;})&&d.items.every(function(it){return prod(it.pid);});})
+      .map(function(d){return '<button class="pickopt bun" data-act="pickbundle" data-id="'+d.id+'"><span>'+esc(d.name)+'<small>'+d.items.map(function(it){return esc(prod(it.pid).name);}).join(' + ')+'</small></span><b>'+money(d.price[md])+'</b></button>';}).join('');
+    h='<h3>'+esc(pp.name)+'</h3><div class="note">'+(avail<=0?'Sold out. Fix the count in Settings if that is wrong.':avail+' left'+(inCart?' &middot; '+inCart+' already in this order':''))+'</div>'+
+      '<div class="picklist">'+rows+'</div>'+(bun?'<div class="lbl">Bundles with this item</div><div class="picklist">'+bun+'</div>':'')+
+      '<div class="btnrow" style="margin-top:14px"><button class="ghost" data-act="sheetclose">Cancel</button></div>';
   }else if(ui.sheet==='start'){
     var rec=dayRec(today());
     h='<h3>Starting cash</h3><div class="note">Money in the drawer before the first sale today ('+esc(dayLabel(Date.now()))+').</div><input class="amt" inputmode="decimal" data-f="startamt" value="'+dollarsStr(rec.start)+'">'+
@@ -983,6 +1016,14 @@ document.addEventListener('click',function(e){
     case 'hhsnooze':ui.hhSnooze=Date.now()+10*60000;renderBanner();break;
     case 'hhdismiss':state.hhDismissDay=today();save();renderBanner();break;
     case 'add':if(addToCart(id,1)){afterCart();}else render();break;
+    case 'pick':ui.pickId=id;ui.sheet='pick';renderSheet();break;
+    case 'pickadd':ui.sheet=null;if(addToCart(id,parseInt(el.getAttribute('data-n'),10))){afterCart();}else render();break;
+    case 'pickbundle':ui.sheet=null;var pb=state.deals.filter(function(x){return x.id===id;})[0];
+      if(pb){var need={};pb.items.forEach(function(it){need[it.pid]=(need[it.pid]||0)+it.qty;});
+        var short=Object.keys(need).filter(function(k){var p=prod(k);return !p||(state.cart[k]||0)+need[k]>p.stock;});
+        if(short.length){toast('Not enough '+(prod(short[0])?prod(short[0]).name:'stock')+' for '+pb.name);render();break;}
+        Object.keys(need).forEach(function(k){state.cart[k]=(state.cart[k]||0)+need[k];});}
+      afterCart();break;
     case 'addn':if(addToCart(id,parseInt(el.getAttribute('data-n'),10))){afterCart();}else render();break;
     case 'addbundle':
       var d=state.deals.filter(function(x){return x.id===id;})[0];var ok=true;
