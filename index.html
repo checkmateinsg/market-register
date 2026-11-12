@@ -449,6 +449,11 @@ function migrate(s){
     s.deals.forEach(function(d){if(d.name==='Afternoon Treat')d.price.reg=1000;});
     s.patch12=true;
   }
+  // one-time update (Nov 12 #13): cranberry poppers $3. Never touches sales.
+  if(!s.patch13){
+    s.products.forEach(function(p){if(/cranberr|popper/i.test(p.name))p.price.reg=300;});
+    s.patch13=true;
+  }
   s.v=2;
   return s;
 }
