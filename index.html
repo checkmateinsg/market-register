@@ -460,6 +460,11 @@ function migrate(s){
     s.deals.forEach(function(d){if(d.name==='Breakfast Bundle')d.price.reg=1300;if(d.name==='Afternoon Treat')d.price.reg=900;});
     s.patch14=true;
   }
+  // one-time update (Nov 12 #15): Breakfast back to $14, Afternoon Treat back to $10. Never touches sales.
+  if(!s.patch15){
+    s.deals.forEach(function(d){if(d.name==='Breakfast Bundle')d.price.reg=1400;if(d.name==='Afternoon Treat')d.price.reg=1000;});
+    s.patch15=true;
+  }
   s.v=2;
   return s;
 }
