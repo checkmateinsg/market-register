@@ -444,6 +444,11 @@ function migrate(s){
     s.products.forEach(function(p){if(/catnip/i.test(p.name))p.price.reg=600;});
     s.patch11=true;
   }
+  // one-time update (Nov 12 #12): Afternoon Treat $10. Never touches sales.
+  if(!s.patch12){
+    s.deals.forEach(function(d){if(d.name==='Afternoon Treat')d.price.reg=1000;});
+    s.patch12=true;
+  }
   s.v=2;
   return s;
 }
