@@ -477,6 +477,11 @@ function migrate(s){
     });
     s.patch16=true;
   }
+  // one-time update (Nov 12 #17): rename Cookie & Bread Bundle to Dessert Trio. Never touches sales.
+  if(!s.patch17){
+    s.deals.forEach(function(d){if(d.name==='Cookie & Bread Bundle')d.name='Dessert Trio';});
+    s.patch17=true;
+  }
   s.v=2;
   return s;
 }
