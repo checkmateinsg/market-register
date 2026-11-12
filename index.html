@@ -482,6 +482,19 @@ function migrate(s){
     s.deals.forEach(function(d){if(d.name==='Cookie & Bread Bundle')d.name='Dessert Trio';});
     s.patch17=true;
   }
+  // one-time update (Nov 12 #18): swap names. cookies+bread+vanilla sugar = Sweet Tooth; cookies+bread+poppers = Dessert Trio. Never touches sales.
+  if(!s.patch18){
+    var nm=function(re){var r=null;s.products.forEach(function(p){if(!r&&re.test(p.name))r=p.id;});return r;};
+    var ck=nm(/cookie/i),bb=nm(/banana/i),vs=nm(/vanilla/i),pp=nm(/cranberr|popper/i);
+    s.deals.forEach(function(d){
+      if(!d.name||!d.items||d.items.length!==3)return;
+      var ids=d.items.map(function(it){return it.pid;});
+      var has=function(x){return ids.indexOf(x)>=0;};
+      if(has(ck)&&has(bb)&&has(vs))d.name='Sweet Tooth';
+      else if(has(ck)&&has(bb)&&has(pp))d.name='Dessert Trio';
+    });
+    s.patch18=true;
+  }
   s.v=2;
   return s;
 }
