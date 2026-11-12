@@ -405,6 +405,18 @@ function migrate(s){
     });
     s.patch6=true;
   }
+  // one-time update (Nov 12 #7): smaller multi-buy discounts (2 saves $1, 3 saves $2). Never touches sales.
+  if(!s.patch7){
+    var M=[[/cookie/i,{2:700,3:1000}],[/^butter/i,{2:900,3:1300}],[/buttermilk/i,{2:700}],[/vanilla/i,{2:1100,3:1600}],
+           [/shot/i,{3:1300}],[/banana/i,{2:1100,3:1600}],[/cranberr|popper/i,{3:500}]];
+    M.forEach(function(m){
+      var p=null;s.products.forEach(function(x){if(!p&&m[0].test(x.name))p=x;});if(!p)return;
+      s.deals.forEach(function(d){
+        if(d.type==='set'&&d.items.length===1&&d.items[0].pid===p.id&&m[1][d.items[0].qty]!=null)d.price.reg=m[1][d.items[0].qty];
+      });
+    });
+    s.patch7=true;
+  }
   s.v=2;
   return s;
 }
