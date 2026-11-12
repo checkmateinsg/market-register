@@ -10,6 +10,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="theme-color" content="#2b2420">
+<meta name="robots" content="noindex,nofollow">
 <title>Market Register</title>
 <style>
 :root{
@@ -252,11 +253,12 @@ function today(){return dayKey(Date.now());}
 /* ---------- state ---------- */
 function defaultState(){
   var P=[
-    {id:'p_cookie',name:'Cookies (bag of 3)',section:'Baked',cost:70,stock:19,price:{reg:450,hh:300}},
-    {id:'p_butter',name:'Butter (4 oz jar)',section:'Dairy',cost:152,stock:22,price:{reg:500,hh:350}},
-    {id:'p_bm',name:'Buttermilk (12 oz)',section:'Dairy',cost:178,stock:5,price:{reg:400,hh:275}},
-    {id:'p_vs',name:'Vanilla Sugar (4 oz)',section:'Pantry',cost:112,stock:11,price:{reg:600,hh:450}},
-    {id:'p_shot',name:'Wellness Shot',section:'Drinks',cost:118,stock:18,price:{reg:400,hh:300}}
+    {id:'p_cookie',name:'Cookies (bag of 3)',section:'Baked',stock:19,price:{reg:450,hh:300}},
+    {id:'p_butter',name:'Butter (4 oz jar)',section:'Dairy',stock:22,price:{reg:500,hh:350}},
+    {id:'p_bm',name:'Buttermilk (12 oz)',section:'Dairy',stock:5,price:{reg:400,hh:275}},
+    {id:'p_vs',name:'Vanilla Sugar (4 oz)',section:'Pantry',stock:11,price:{reg:600,hh:450}},
+    {id:'p_shot',name:'Wellness Shot',section:'Drinks',stock:18,price:{reg:400,hh:300}},
+    {id:'p_banana',name:'Banana Bread (mini)',section:'Baked',stock:16,price:{reg:400,hh:275}}
   ];
   P.forEach(function(p,i){p.color=COLORS[i%COLORS.length];});
   var D=[
@@ -268,21 +270,22 @@ function defaultState(){
     {id:'d6',type:'set',name:'',items:[{pid:'p_vs',qty:2}],price:{reg:1100,hh:800}},
     {id:'d7',type:'set',name:'',items:[{pid:'p_vs',qty:3}],price:{reg:1500,hh:null}},
     {id:'d8',type:'set',name:'',items:[{pid:'p_shot',qty:3}],price:{reg:1000,hh:700}},
+    {id:'d10',type:'set',name:'',items:[{pid:'p_banana',qty:3}],price:{reg:1000,hh:null}},
     {id:'d9',type:'set',name:'Sampler',items:[{pid:'p_butter',qty:1},{pid:'p_cookie',qty:1},{pid:'p_vs',qty:1}],price:{reg:1300,hh:1000}}
   ];
-  return migrate({v:2,products:P,deals:D,orders:[],cart:{},mode:'reg',pay:'Cash',nextOrder:1,lastBackup:null,fee:{pct:2.6,fixed:15},sqOffline:false});
+  return migrate({v:2,products:P,deals:D,orders:[],cart:{},mode:'reg',pay:'Cash',nextOrder:1,lastBackup:null,sqOffline:false});
 }
 // Upgrades any older saved/backup data to the current shape. Never throws away sales.
 function migrate(s){
   if(!s||!s.products||!s.deals)return null;
-  var secMap={p_cookie:'Baked',p_butter:'Dairy',p_bm:'Dairy',p_vs:'Pantry',p_shot:'Drinks'};
+  var secMap={p_cookie:'Baked',p_butter:'Dairy',p_bm:'Dairy',p_vs:'Pantry',p_shot:'Drinks',p_banana:'Baked'};
   s.products.forEach(function(p,i){
     if(!p.section)p.section=secMap[p.id]||'Items';
     if(!p.color)p.color=COLORS[i%COLORS.length];
     if(!p.price)p.price={reg:0,hh:null};
     if(p.price.hh===undefined)p.price.hh=null;
     if(typeof p.stock!=='number')p.stock=0;
-    if(typeof p.cost!=='number')p.cost=0;
+    delete p.cost;   // costs are never kept in this app
   });
   s.deals.forEach(function(d){
     if(!d.type)d.type='set';
@@ -302,7 +305,7 @@ function migrate(s){
   });
   s.cart=s.cart||{};s.mode=s.mode||'reg';s.pay=s.pay||'Cash';
   s.nextOrder=Math.max(s.nextOrder||1,maxId+1);
-  s.fee=s.fee||{pct:2.6,fixed:15};
+  delete s.fee;
   if(s.sqOffline==null)s.sqOffline=false;
   if(!s.days)s.days={};
   if(s.pin===undefined)s.pin=null;
@@ -457,7 +460,6 @@ function hints(pr){
   out.sort(function(a,b){return b.save-a.save;});
   return out.slice(0,2);
 }
-function feeFor(total){var f=state.fee||{pct:2.6,fixed:15};return Math.round(total*f.pct/100+f.fixed);}
 // Manual price adjustment (comp / set total / take off), applied on top of the deal pricing
 function finalOf(pr){
   var a=ui.adj;if(!a)return {total:pr.total,given:0,adj:null};
@@ -469,34 +471,6 @@ function finalOf(pr){
 }
 function effTender(fin){return ui.tenderExact?fin.total:ui.tender;}
 function resetSale(){ui.adj=null;ui.draft=null;ui.tender=null;ui.tenderExact=false;ui.note='';}
-
-/* ---------- margin check ---------- */
-function dealProfit(d,mode){
-  var t=d.type||'set',price,cost=0;
-  if(t==='set'){
-    price=d.price[mode];if(price==null||!d.items.length)return null;
-    d.items.forEach(function(it){var p=prod(it.pid);cost+=it.qty*(p?p.cost:0);});
-  }else if(t==='mix'){
-    price=d.price[mode];var mx=0;(d.pids||[]).forEach(function(x){var p=prod(x);if(p&&p.cost>mx)mx=p.cost;});
-    if(price==null||!(d.pids||[]).length)return null;cost=mx*Math.max(1,d.qty||1);   // worst case: customer picks the costliest item every time
-  }else{
-    var a=prod(d.a),b=prod(d.b),off=d.off?d.off[mode]:null;if(!a||!b||off==null)return null;
-    price=Math.max(0,single(a,mode)+single(b,mode)-off);cost=a.cost+b.cost;
-  }
-  return {price:price,cost:cost,cash:price-cost,card:price-cost-feeFor(price)};
-}
-function mgLine(rows){  // rows: [[label,profitObj],...]
-  var worst=Infinity,parts=[];
-  rows.forEach(function(r){
-    if(!r[1]){parts.push(r[0]+': not offered');return;}
-    var x=r[1];worst=Math.min(worst,x.card);
-    parts.push(r[0]+' sells '+money(x.price)+' &rarr; profit '+money(x.cash)+' cash / '+money(x.card)+' card');
-  });
-  var cls=worst===Infinity?'':(worst<0?'bad':(worst<50?'amber':''));
-  var warn=cls==='bad'?' &mdash; LOSES MONEY on card':(cls==='amber'?' &mdash; very thin after card fee':'');
-  return '<div class="mg '+cls+'">'+parts.join('<br>')+warn+'</div>';
-}
-function prodProfit(p,mode){var price=single(p,mode);return {price:price,cost:p.cost,cash:price-p.cost,card:price-p.cost-feeFor(price)};}
 
 /* ---------- actions ---------- */
 function toast(msg,undo){
@@ -526,7 +500,7 @@ function completeSale(){
   for(var k in state.cart){units[k]=state.cart[k];names[k]=prod(k).name;prod(k).stock-=state.cart[k];}
   var pay=fin.total===0?'Free':state.pay,isCard=pay==='Card';
   var o={id:state.nextOrder++,t:Date.now(),mode:state.mode,pay:pay,total:fin.total,listTotal:pr.total,savings:pr.savings,lines:pr.lines,units:units,names:names,voided:false,
-    fee:isCard?feeFor(fin.total):0,offline:isCard&&!!state.sqOffline,adj:fin.adj?{type:fin.adj.type,reason:fin.adj.reason}:null,
+    offline:isCard&&!!state.sqOffline,adj:fin.adj?{type:fin.adj.type,reason:fin.adj.reason}:null,
     note:ui.note.trim(),tender:tender,change:change,refundNeeded:false};
   state.orders.push(o);state.cart={};resetSale();save();render();
   toast('Sale #'+o.id+' recorded: '+money(o.total)+(change?' (change '+money(change)+')':''),true);
@@ -551,16 +525,16 @@ function pendingRefunds(){return state.orders.filter(function(o){return o.voided
 function report(day){
   day=day||ui.day;
   var orders=state.orders.filter(function(o){return !o.voided&&(day==='all'||dayKey(o.t)===day);});
-  var R={orders:orders,count:orders.length,revenue:0,units:0,cogs:0,byMode:{reg:{n:0,rev:0},hh:{n:0,rev:0}},mix:{},prod:{},pay:{},
-    card:{n:0,gross:0,fee:0,off:{n:0,amt:0}},adj:{n:0,total:0,byReason:{}},cashSales:0};
+  var R={orders:orders,count:orders.length,revenue:0,units:0,byMode:{reg:{n:0,rev:0},hh:{n:0,rev:0}},mix:{},prod:{},pay:{},
+    card:{n:0,gross:0,off:{n:0,amt:0}},adj:{n:0,total:0,byReason:{}},cashSales:0};
   orders.forEach(function(o){
     R.revenue+=o.total;R.byMode[o.mode].n++;R.byMode[o.mode].rev+=o.total;
-    if(o.pay==='Card'){R.card.n++;R.card.gross+=o.total;R.card.fee+=(o.fee||0);if(o.offline){R.card.off.n++;R.card.off.amt+=o.total;}}
+    if(o.pay==='Card'){R.card.n++;R.card.gross+=o.total;if(o.offline){R.card.off.n++;R.card.off.amt+=o.total;}}
     R.pay[o.pay]=(R.pay[o.pay]||0)+o.total;
     var given=(o.listTotal!=null?o.listTotal:o.total)-o.total;
     if(given>0){R.adj.n++;R.adj.total+=given;var rs=(o.adj&&o.adj.reason)||'Other';R.adj.byReason[rs]=(R.adj.byReason[rs]||0)+given;}
     for(var pid in o.units){
-      R.units+=o.units[pid];var p=prod(pid);R.cogs+=o.units[pid]*(p?p.cost:0);
+      R.units+=o.units[pid];var p=prod(pid);
       var e=R.prod[pid]||(R.prod[pid]={name:(p?p.name:(o.names&&o.names[pid])||pid),units:0,rev:0});e.units+=o.units[pid];
     }
     o.lines.forEach(function(l){
@@ -574,18 +548,17 @@ function report(day){
     });
   });
   R.cashSales=R.pay.Cash||0;
-  R.profit=R.revenue-R.cogs-R.card.fee;
   return R;
 }
 function csvEsc(v){v=String(v==null?'':v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;}
 function buildCSV(){
-  var rows=[['Order','Date','Time','Mode','Payment','Status','Sold as','Item / deal','Qty or times','Line amount','List total','Order total','Adjustment','Adj reason','Est. card fee','Square offline','Cash given','Change','Refund in Square','Note']];
+  var rows=[['Order','Date','Time','Mode','Payment','Status','Sold as','Item / deal','Qty or times','Line amount','List total','Order total','Adjustment','Adj reason','Square offline','Cash given','Change','Refund in Square','Note']];
   state.orders.forEach(function(o){
     var given=(o.listTotal!=null?o.listTotal:o.total)-o.total;
     o.lines.forEach(function(l){
       rows.push([o.id,dayLabel(o.t),timeLabel(o.t),o.mode==='hh'?'Happy Hour':'Regular',o.pay,o.voided?'VOIDED':'ok',
         l.kind==='deal'?'Deal':'Single',l.name,l.kind==='deal'?l.count:l.qty,(l.amount/100).toFixed(2),((o.listTotal!=null?o.listTotal:o.total)/100).toFixed(2),(o.total/100).toFixed(2),
-        given>0?(given/100).toFixed(2):'',(o.adj&&o.adj.reason)||'',((o.fee||0)/100).toFixed(2),o.offline?'yes':'',
+        given>0?(given/100).toFixed(2):'',(o.adj&&o.adj.reason)||'',o.offline?'yes':'',
         o.tender!=null?(o.tender/100).toFixed(2):'',o.change!=null?(o.change/100).toFixed(2):'',o.refundNeeded?'NEEDS REFUND':'',o.note||'']);
     });
   });
@@ -619,13 +592,13 @@ function copyText(text){
 }
 function closeSummary(dk){
   var R=report(dk),rec=dayRec(dk),cs=R.cashSales,exp=(rec.start||0)+cs;
-  var t='Close-out '+dk+'\nRevenue '+money(R.revenue)+' ('+R.count+' orders, '+R.units+' items)\nProfit (after card fees, before labor) '+money(R.profit)+
+  var t='Close-out '+dk+'\nRevenue '+money(R.revenue)+' ('+R.count+' orders, '+R.units+' items)'+
     '\nCash: start '+money(rec.start||0)+' + sales '+money(cs)+' = expected '+money(exp)+(rec.counted!=null?', counted '+money(rec.counted)+' ('+money(rec.counted-exp)+')':', not counted')+
-    '\nCard: app '+money(R.card.gross)+(rec.sq!=null?', Square '+money(rec.sq)+' ('+money(rec.sq-R.card.gross)+')':', Square total not entered')+', est. fees '+money(R.card.fee)+
+    '\nCard: app '+money(R.card.gross)+(rec.sq!=null?', Square '+money(rec.sq)+' ('+money(rec.sq-R.card.gross)+')':', Square total not entered')+
     '\nGiven away (samples/discounts): '+money(R.adj.total);
   Object.keys(R.adj.byReason).forEach(function(k){t+='\n  '+k+': '+money(R.adj.byReason[k]);});
-  var left=0,val=0;state.products.forEach(function(p){left+=p.stock;val+=p.stock*p.cost;});
-  t+='\nLeft over: '+left+' items (cost '+money(val)+')';
+  var left=0;state.products.forEach(function(p){left+=p.stock;});
+  t+='\nLeft over: '+left+' items';
   return t;
 }
 
@@ -713,7 +686,7 @@ function viewRegister(){
     return '<div class="hint">Add 1 more '+esc(h.name)+' for just +'+money(h.delta)+' (saves '+money(h.save)+')<br><button data-act="inc" data-id="'+h.pid+'">Add it</button></div>';}).join('');
   var empty=!cartCount();
   var pay=['Cash','Card','Other'].map(function(m){return '<button class="'+(state.pay===m?'on':'')+'" data-act="pay" data-m="'+m+'">'+(m==='Card'?'Card (Square)':m)+'</button>';}).join('');
-  var cardBox=(state.pay==='Card'&&!empty&&fin.total>0)?'<div class="cardbox">Charge <b>'+money(fin.total)+'</b> in Square (Keypad), wait for approval, then tap Complete Sale.<br><span>Est. Square fee '+money(feeFor(fin.total))+'</span>'+
+  var cardBox=(state.pay==='Card'&&!empty&&fin.total>0)?'<div class="cardbox">Charge <b>'+money(fin.total)+'</b> in Square (Keypad), wait for approval, then tap Complete Sale.'+
     '<button data-act="sqoff" class="'+(state.sqOffline?'on':'')+'">Square offline: '+(state.sqOffline?'YES':'NO')+'</button></div>':'';
   var cashBox=(state.pay==='Cash'&&!empty&&fin.total>0)?tenderBlock(fin.total):'';
   var dr=cashExpectedToday();
@@ -759,9 +732,9 @@ function viewSales(){
   return '<div class="page tight"><div class="bar"><select class="day" data-f="day">'+opts+'</select>'+
     '<button class="sbtn" data-act="csv">CSV</button><button class="sbtn" data-act="csvcopy">Copy CSV</button><button class="sbtn" data-act="backup">Backup</button><button class="sbtn" data-act="sumcopy">Copy summary</button>'+
     '<button class="sbtn" data-act="toggleorders">'+(ui.showOrders?'Hide orders':'Show orders ('+hist.length+')')+'</button></div>'+
-    '<div class="strip">'+st('Revenue',money(R.revenue))+st('Profit',money(R.profit),'pos')+st('Orders',R.count)+st('Items',R.units)+st('Avg order',money(R.count?R.revenue/R.count:0))+
-    st('Card fees',money(R.card.fee))+st('Given away',money(R.adj.total))+'</div>'+
-    '<div class="line">'+modeTxt+' &middot; By payment: '+payTxt+(R.card.n?' &middot; Card net of fees '+money(R.card.gross-R.card.fee):'')+(adjTxt?' &middot; Given: '+adjTxt:'')+offTxt+'</div>'+
+    '<div class="strip">'+st('Revenue',money(R.revenue))+st('Orders',R.count)+st('Items',R.units)+st('Avg order',money(R.count?R.revenue/R.count:0))+
+    st('Card sales',money(R.card.gross))+st('Given away',money(R.adj.total))+'</div>'+
+    '<div class="line">'+modeTxt+' &middot; By payment: '+payTxt+(adjTxt?' &middot; Given: '+adjTxt:'')+offTxt+'</div>'+
     '<div class="two"><div><h3 class="sec">How it sold</h3><table class="cmp"><tr><th>Sold as</th><th class="n">Count</th><th class="n">Items</th><th class="n">Revenue</th></tr>'+mixRows+'</table></div>'+
     '<div><h3 class="sec">By product</h3><table class="cmp"><tr><th>Product</th><th class="n">Sold</th><th class="n">Revenue</th><th class="n">Left</th></tr>'+prodRows+'</table></div></div>'+
     (ui.showOrders?'<h3 class="sec">Orders</h3><table><tr><th>Order</th><th>Items</th><th>Type</th><th class="n">Total</th><th></th></tr>'+histRows+'</table>':'')+'</div>';
@@ -776,21 +749,21 @@ function viewClose(){
   var cashDiff=over==null?'<span style="color:var(--muted)">enter your count</span>':'<span class="diff '+dcls(over)+'">'+(over===0?'Matches':(over>0?'Over '+money(over):'Short '+money(-over)))+'</span>';
   var sqd=rec.sq==null?null:rec.sq-R.card.gross;
   var sqDiff=sqd==null?'<span style="color:var(--muted)">enter Square total</span>':'<span class="diff '+dcls(sqd)+'">'+(sqd===0?'Matches':(sqd>0?'Square is higher by '+money(sqd):'Square is lower by '+money(-sqd)))+'</span>';
-  var shrinkVal=0,anyCount=false;
+  var shrinkUnits=0,anyCount=false;
   var rows=state.products.map(function(p){
     var e=R.prod[p.id]||{units:0},c=rec.counts[p.id],has=(c!=null);
-    var d=has?c-p.stock:null;if(has){anyCount=true;shrinkVal+=d*p.cost;}
+    var d=has?c-p.stock:null;if(has){anyCount=true;shrinkUnits+=d;}
     return '<tr><td>'+esc(p.name)+'</td><td class="n">'+e.units+'</td><td class="n">'+p.stock+'</td><td class="n"><input class="cnt" inputmode="numeric" data-f="cocount" data-id="'+p.id+'" value="'+(has?c:'')+'"></td><td class="n">'+
       (has?'<span class="diff '+dcls(d)+'">'+(d===0?'ok':(d>0?'+'+d:d))+'</span>':'')+'</td></tr>';}).join('');
-  var left=0,val=0,retail=0;state.products.forEach(function(p){left+=p.stock;val+=p.stock*p.cost;retail+=p.stock*p.price.reg;});
+  var left=0;state.products.forEach(function(p){left+=p.stock;});
   var rf=state.orders.filter(function(o){return o.voided&&o.refundNeeded&&dayKey(o.t)===dk;});
   var since=state.orders.length-(state.lastBackup?state.lastBackup.orders:0);
   return '<div class="page"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px"><select class="day" data-f="coday">'+opts+'</select>'+
     (rec.closedAt?'<span class="tag reg">Closed '+timeLabel(rec.closedAt)+'</span>':'')+'</div>'+
     '<div class="cards"><div class="stat"><div class="k">Revenue</div><div class="v">'+money(R.revenue)+'</div><div class="k">'+R.count+' orders</div></div>'+
-    '<div class="stat"><div class="k">Profit (after fees)</div><div class="v pos">'+money(R.profit)+'</div></div>'+
+    '<div class="stat"><div class="k">Items sold</div><div class="v">'+R.units+'</div></div>'+
     '<div class="stat"><div class="k">Given away</div><div class="v" style="font-size:22px">'+money(R.adj.total)+'</div></div>'+
-    '<div class="stat"><div class="k">Left to take home</div><div class="v '+(left>0?'neg':'pos')+'">'+left+'</div><div class="k">cost '+money(val)+'</div></div></div>'+
+    '<div class="stat"><div class="k">Left to take home</div><div class="v '+(left>0?'neg':'pos')+'">'+left+'</div></div></div>'+
     '<h3 class="sec">1. Cash drawer</h3><div class="card"><div class="frm">'+
       '<label>Starting cash $<input inputmode="decimal" data-f="co" data-k="start" value="'+dollarsStr(rec.start)+'"></label>'+
       '<label>Cash sales (app)<input disabled value="'+dollarsStr(R.cashSales)+'"></label>'+
@@ -799,14 +772,14 @@ function viewClose(){
     '<h3 class="sec">2. Card sales vs Square</h3><div class="card"><div class="frm">'+
       '<label>Card sales (app)<input disabled value="'+dollarsStr(R.card.gross)+'"></label>'+
       '<label>Square total today $<input inputmode="decimal" data-f="co" data-k="sq" value="'+dollarsStr(rec.sq)+'"></label>'+
-      '<label>Est. fees<input disabled value="'+dollarsStr(R.card.fee)+'"></label></div><div style="margin-top:10px">'+sqDiff+'</div>'+
+      '</div><div style="margin-top:10px">'+sqDiff+'</div>'+
       (rf.length?'<div class="mg bad">'+rf.length+' voided card sale(s) still flagged for refund. Review them in Sales.</div>':'')+
       (R.card.off.n?'<div class="mg amber">'+R.card.off.n+' card sale(s) taken offline ('+money(R.card.off.amt)+'). Confirm they went through in Square.</div>':'')+'</div>'+
     '<h3 class="sec">3. Count what is left</h3><p class="note">Count the real items and type them in. The difference is stock that left without a sale (or a miscount).</p>'+
     '<table><tr><th>Product</th><th class="n">Sold</th><th class="n">App says left</th><th class="n">Counted</th><th class="n">Diff</th></tr>'+rows+'</table>'+
-    (anyCount?'<div class="mg '+(shrinkVal<0?'bad':'')+'">Unaccounted stock value (at cost): '+money(shrinkVal)+'</div>':'')+
+    (anyCount?'<div class="mg '+(shrinkUnits<0?'bad':'')+'">Unaccounted items: '+(shrinkUnits>0?'+':'')+shrinkUnits+' (counted minus app)</div>':'')+
     '<div style="margin-top:10px"><button class="sbtn" data-act="applycounts">Update app stock to my counts</button></div>'+
-    '<h3 class="sec">4. Finish</h3><div class="card"><div style="margin-bottom:10px;font-weight:600">'+(since>0?since+' sale(s) not in any backup yet.':'Everything is backed up.')+' Left over retail value: '+money(retail)+'.</div>'+
+    '<h3 class="sec">4. Finish</h3><div class="card"><div style="margin-bottom:10px;font-weight:600">'+(since>0?since+' sale(s) not in any backup yet.':'Everything is backed up.')+' '+left+' item(s) left over.</div>'+
     '<button class="sbtn pri" data-act="closeday">Close day &amp; back up</button><button class="sbtn" data-act="cosum">Copy close-out summary</button></div></div>';
 }
 function viewPin(){
@@ -825,10 +798,9 @@ function viewSettings(){
       '<label>Name<input data-f="prod" data-id="'+p.id+'" data-k="name" value="'+esc(p.name)+'"></label>'+
       '<label>Price $<input inputmode="decimal" data-f="prod" data-id="'+p.id+'" data-k="reg" value="'+dollarsStr(p.price.reg)+'"></label>'+
       '<label>Happy hr $<input inputmode="decimal" data-f="prod" data-id="'+p.id+'" data-k="hh" value="'+dollarsStr(p.price.hh)+'" placeholder="same"></label>'+
-      '<label>Your cost $<input inputmode="decimal" data-f="prod" data-id="'+p.id+'" data-k="cost" value="'+dollarsStr(p.cost)+'"></label>'+
       '<label>In stock<input inputmode="numeric" data-f="prod" data-id="'+p.id+'" data-k="stock" value="'+p.stock+'"></label>'+
       '<label>&nbsp;<span><button class="sbtn sm" data-act="mvprod" data-id="'+p.id+'" data-dir="-1" '+(i===0?'disabled':'')+'>&uarr;</button><button class="sbtn sm" data-act="mvprod" data-id="'+p.id+'" data-dir="1" '+(i===state.products.length-1?'disabled':'')+'>&darr;</button><button class="sbtn danger sm" data-act="delprod" data-id="'+p.id+'">Delete</button></span></label></div>'+
-      mgLine([['Regular',prodProfit(p,'reg')],['Happy hour',prodProfit(p,'hh')]])+'</div>';}).join('');
+      '</div>';}).join('');
   var deals=state.deals.map(function(d){
     var t=d.type||'set',body='',tag='';
     var money2=function(k,lab,ph){return '<label>'+lab+'<input inputmode="decimal" data-f="deal" data-id="'+d.id+'" data-k="'+k+'" value="'+dollarsStr(k==='reg'?d.price.reg:k==='hh'?d.price.hh:k==='offreg'?(d.off||{}).reg:(d.off||{}).hh)+'" placeholder="'+ph+'"></label>';};
@@ -855,16 +827,13 @@ function viewSettings(){
       body='<div class="frm"><label>Item A<select data-f="deal" data-id="'+d.id+'" data-k="a">'+sa+'</select></label><label>Item B<select data-f="deal" data-id="'+d.id+'" data-k="b">'+sb+'</select></label>'+
         money2('offreg','$ off the pair','')+money2('offhh','$ off (happy hr)','not offered')+'<label>&nbsp;<button class="sbtn danger" data-act="deldeal" data-id="'+d.id+'">Delete deal</button></label></div>';
     }
-    return '<div class="card"><span class="dtype">'+tag+'</span>'+body+mgLine([['Regular',dealProfit(d,'reg')],['Happy hour',dealProfit(d,'hh')]])+'</div>';}).join('');
-  return '<div class="page">'+'<h3 class="sec">Products &amp; stock</h3><p class="note">Stock goes down automatically with each sale. Edit it here if your count is off. Leave Happy hr blank to use the regular price. Profit lines include the Square card fee.</p>'+prods+
+    return '<div class="card"><span class="dtype">'+tag+'</span>'+body+'</div>';}).join('');
+  return '<div class="page">'+'<h3 class="sec">Products &amp; stock</h3><p class="note">Stock goes down automatically with each sale. Edit it here if your count is off. Leave Happy hr blank to use the regular price.</p>'+prods+
     '<button class="sbtn pri" data-act="addprod">+ Add product</button>'+
     '<h3 class="sec">Deals &amp; bundles</h3><p class="note">The register applies the cheapest combination for the customer automatically. A blank happy hour price means the deal is not offered during happy hour. Set deal = fixed items for one price. Mix &amp; match = any N from a group for one price. Pair discount = money off when two specific items are bought together.</p>'+deals+
     '<button class="sbtn pri" data-act="adddeal">+ Set deal</button><button class="sbtn pri" data-act="addmix">+ Mix &amp; match</button><button class="sbtn pri" data-act="addpair">+ Pair discount</button>'+
     '<h3 class="sec">Happy hour reminder</h3><p class="note">At this time a reminder bar appears on every screen. You still switch happy hour on yourself. Leave blank for no reminder.</p><div class="card"><div class="frm">'+
       '<label>Reminder time<input type="time" data-f="hhstart" value="'+esc(state.hhStart||'')+'"></label></div></div>'+
-    '<h3 class="sec">Card fees (Square)</h3><p class="note">Used for the fee estimate and profit checks only. Check your own rate in Square Dashboard and match it here.</p><div class="card"><div class="frm">'+
-      '<label>Percent %<input inputmode="decimal" data-f="fee" data-k="pct" value="'+((state.fee||{pct:2.6}).pct)+'"></label>'+
-      '<label>Per sale $<input inputmode="decimal" data-f="fee" data-k="fixed" value="'+dollarsStr((state.fee||{fixed:15}).fixed)+'"></label></div></div>'+
     '<h3 class="sec">Data &amp; security</h3><button class="sbtn" data-act="backup">Backup (JSON)</button><label class="sbtn" style="display:inline-block">Restore backup<input type="file" accept=".json,application/json" data-f="restore" style="display:none"></label>'+
     '<button class="sbtn" data-act="changepin">Change PIN</button>'+
     '<button class="sbtn danger" data-act="resetsales">Clear all sales (restock)</button><button class="sbtn danger" data-act="resetall">Reset everything</button></div>';
@@ -962,7 +931,7 @@ document.addEventListener('click',function(e){
     case 'csvcopy':copyText(buildCSV());break;
     case 'backup':backupNow();break;
     case 'sumcopy':
-      var R=report();var txt='Market sales summary ('+(ui.day==='all'?'all days':ui.day)+')\nRevenue '+money(R.revenue)+'\nProfit (before labor) '+money(R.profit)+'\nOrders '+R.count+'\nItems sold '+R.units+'\nGiven away '+money(R.adj.total)+'\n';
+      var R=report();var txt='Market sales summary ('+(ui.day==='all'?'all days':ui.day)+')\nRevenue '+money(R.revenue)+'\nOrders '+R.count+'\nItems sold '+R.units+'\nGiven away '+money(R.adj.total)+'\n';
       Object.keys(R.mix).forEach(function(k){var m=R.mix[k];txt+=m.label+': '+m.times+' = '+money(m.rev)+'\n';});copyText(txt);break;
     case 'cosum':copyText(closeSummary(ui.coDay||today()));break;
     case 'applycounts':
@@ -981,7 +950,7 @@ document.addEventListener('click',function(e){
     case 'changepin':
       confirmBox('Change the PIN? You will be asked to create a new one.',function(){state.pin=null;ui.unlocked=false;ui.pin='';ui.pinFirst=null;ui.pinMsg='';save();render();});break;
     case 'addprod':
-      state.products.push({id:uid('p_'),name:'New item',section:'Items',cost:0,stock:0,price:{reg:500,hh:null},color:COLORS[state.products.length%COLORS.length]});save();render();break;
+      state.products.push({id:uid('p_'),name:'New item',section:'Items',stock:0,price:{reg:500,hh:null},color:COLORS[state.products.length%COLORS.length]});save();render();break;
     case 'mvprod':
       var ix=-1;state.products.forEach(function(p,i){if(p.id===id)ix=i;});var to=ix+parseInt(el.getAttribute('data-dir'),10);
       if(ix>=0&&to>=0&&to<state.products.length){var tmp=state.products[ix];state.products[ix]=state.products[to];state.products[to]=tmp;save();}render();break;
@@ -1058,7 +1027,6 @@ document.addEventListener('change',function(e){
     else if(k==='section')p.section=el.value.trim()||'Items';
     else if(k==='reg'){var c=parseCents(el.value);if(c!=null)p.price.reg=c;}
     else if(k==='hh'){p.price.hh=parseCents(el.value);}
-    else if(k==='cost'){var cc=parseCents(el.value);p.cost=cc==null?0:cc;}
     else if(k==='stock'){var n=parseInt(el.value,10);p.stock=isNaN(n)||n<0?0:n;}
   }else if(f==='deal'){
     var d=state.deals.filter(function(x){return x.id===id;})[0];if(!d)return;
@@ -1074,10 +1042,6 @@ document.addEventListener('change',function(e){
     var it=dd.items[parseInt(el.getAttribute('data-i'),10)];if(!it)return;
     if(k==='pid')it.pid=el.value;
     else if(k==='qty'){var q=parseInt(el.value,10);it.qty=isNaN(q)||q<1?1:q;}
-  }else if(f==='fee'){
-    state.fee=state.fee||{pct:2.6,fixed:15};
-    if(k==='pct'){var pc=parseFloat(el.value);if(!isNaN(pc)&&pc>=0&&pc<20)state.fee.pct=pc;}
-    else{var fx=parseCents(el.value);if(fx!=null)state.fee.fixed=fx;}
   }
   save();
   setTimeout(render,0); // defer so the input's blur finishes before the DOM is replaced
