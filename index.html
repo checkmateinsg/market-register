@@ -366,6 +366,20 @@ function migrate(s){
     });
     s.patch3=true;
   }
+  // one-time update (Nov 12 #4): cookies $4, 2 for $7, 3 for $10. Never touches sales.
+  if(!s.patch4){
+    var ck4=null;s.products.forEach(function(p){if(/cookie/i.test(p.name))ck4=p;});
+    if(ck4){
+      ck4.price.reg=400;
+      s.deals.forEach(function(d){
+        if(d.type==='set'&&d.items.length===1&&d.items[0].pid===ck4.id){
+          if(d.items[0].qty===2)d.price.reg=700;
+          if(d.items[0].qty===3)d.price.reg=1000;
+        }
+      });
+    }
+    s.patch4=true;
+  }
   s.v=2;
   return s;
 }
