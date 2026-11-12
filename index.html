@@ -352,6 +352,20 @@ function migrate(s){
     if(!hasP)s.deals.push({id:'d_popper3',type:'set',name:'',items:[{pid:pop.id,qty:3}],price:{reg:500,hh:null}});
     s.patch2=true;
   }
+  // one-time update (Nov 12 #3): named 3-item bundles. Never touches sales.
+  if(!s.patch3){
+    var pidOf=function(re){for(var k=0;k<s.products.length;k++){if(re.test(s.products[k].name))return s.products[k].id;}return null;};
+    var B=[['Breakfast Bundle',[/banana/i,/butter \(|^butter/i,/shot/i],1300],
+           ["Baker's Bundle",[/^butter/i,/buttermilk/i,/vanilla/i],1200],
+           ['Afternoon Treat',[/cookie/i,/cranberr|popper/i,/shot/i],1000]];
+    B.forEach(function(x,n){
+      var ids=x[1].map(pidOf);
+      if(ids.some(function(v){return !v;}))return;
+      if(s.deals.some(function(d){return d.name===x[0];}))return;
+      s.deals.push({id:'d_bundle'+(n+1),type:'set',name:x[0],items:ids.map(function(v){return {pid:v,qty:1};}),price:{reg:x[2],hh:null}});
+    });
+    s.patch3=true;
+  }
   s.v=2;
   return s;
 }
