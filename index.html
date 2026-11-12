@@ -434,6 +434,11 @@ function migrate(s){
     });
     s.patch9=true;
   }
+  // one-time update (Nov 12 #10): no multi-buy deals, bundles only. Never touches sales.
+  if(!s.patch10){
+    s.deals=s.deals.filter(function(d){return !((d.type||'set')==='set'&&d.items&&d.items.length===1);});
+    s.patch10=true;
+  }
   s.v=2;
   return s;
 }
