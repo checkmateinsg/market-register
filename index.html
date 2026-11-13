@@ -520,6 +520,21 @@ function migrate(s){
     s.deals.forEach(function(d){if(d.name)d.price.hh=null;});
     s.patch21=true;
   }
+  // one-time update (Nov 13 #2): real BOGO. Prices stay normal; BOGO mode = pay for one, get the second free (items and bundles). Never touches sales.
+  if(!s.patch22){
+    s.products.forEach(function(p){p.price.hh=null;});
+    s.deals=s.deals.filter(function(d){return !d.bogo;});
+    var add=[];
+    s.deals.forEach(function(d){
+      if(d.name&&(d.type||'set')==='set'){
+        d.price.hh=d.price.reg;
+        add.push({id:'bogo_'+d.id,type:'set',bogo:true,name:'BOGO '+d.name,items:d.items.map(function(it){return {pid:it.pid,qty:it.qty*2};}),price:{reg:null,hh:d.price.reg}});
+      }
+    });
+    s.products.forEach(function(p){add.push({id:'bogo_'+p.id,type:'set',bogo:true,name:'BOGO',items:[{pid:p.id,qty:2}],price:{reg:null,hh:p.price.reg}});});
+    s.deals=s.deals.concat(add);
+    s.patch22=true;
+  }
   s.v=2;
   return s;
 }
@@ -848,7 +863,7 @@ function renderHeader(){
   var tabs=[['register','Register'],['sales','Sales'],['close','Close Out'],['settings','Settings']];
   $('#tabs').innerHTML=tabs.map(function(t){return '<button class="tab '+(ui.tab===t[0]?'on':'')+'" data-act="tab" data-t="'+t[0]+'">'+t[1]+'</button>';}).join('');
   var hh=state.mode==='hh';
-  var b=$('#hhbtn');b.textContent='BOGO (50% off): '+(hh?'ON':'OFF');b.className='hhbtn'+(hh?' on':'');
+  var b=$('#hhbtn');b.textContent='BOGO: '+(hh?'ON':'OFF');b.className='hhbtn'+(hh?' on':'');
   document.body.className=hh?'hh':'';
   $('#hhstrip').innerHTML=hh?'<div class="hhstrip">HAPPY HOUR PRICES ACTIVE</div>':'';
 }
@@ -874,17 +889,17 @@ function viewRegister(){
   var mode=state.mode,pr=priceCart(state.cart),fin=finalOf(pr);
   function tile(p){
     var q=state.cart[p.id]||0,left=p.stock-q;
-    var chips=state.deals.filter(function(d){return (d.type||'set')==='set'&&d.price[mode]!=null&&d.items.length===1&&d.items[0].pid===p.id;}).map(function(d){
+    var chips=state.deals.filter(function(d){return !d.bogo&&(d.type||'set')==='set'&&d.price[mode]!=null&&d.items.length===1&&d.items[0].pid===p.id;}).map(function(d){
       return '<span class="chip" data-act="addn" data-id="'+p.id+'" data-n="'+d.items[0].qty+'">'+esc(dealLabel(d,mode))+'</span>';}).join('');
     return '<div class="tile '+(left<=0?'out':'')+'" style="--c:'+p.color+'" data-act="pick" data-id="'+p.id+'">'+
       '<span class="tn">'+esc(p.name)+'</span><span class="tp">'+money(single(p))+'</span>'+
-      (chips?'<div class="tdeals">'+state.deals.filter(function(d){return (d.type||'set')==='set'&&d.price[mode]!=null&&d.items.length===1&&d.items[0].pid===p.id;}).map(function(d){return esc(dealLabel(d,mode));}).join(' &middot; ')+'</div>':'')+
+      (chips?'<div class="tdeals">'+state.deals.filter(function(d){return !d.bogo&&(d.type||'set')==='set'&&d.price[mode]!=null&&d.items.length===1&&d.items[0].pid===p.id;}).map(function(d){return esc(dealLabel(d,mode));}).join(' &middot; ')+'</div>':'')+
       '<span class="stock '+(left<=3?'low':'')+'">'+(left<=0?'Sold out':left+' left')+'</span>'+
       (q?'<span class="qtybadge">'+q+'</span>':'')+'</div>';
   }
   var tiles=state.products.map(tile).join('');
   var dealCards=state.deals.map(function(d){
-    var t=d.type||'set';if(d.price[mode]==null&&t!=='pair')return '';
+    var t=d.type||'set';if(d.bogo)return '';if(d.price[mode]==null&&t!=='pair')return '';
     if(t==='set'){
       if(d.items.length<2||!d.items.every(function(it){return prod(it.pid);}))return '';
       return '<div class="bundle" data-act="addbundle" data-id="'+d.id+'"><span class="bn">'+esc(dealName(d))+'</span><span class="bi">'+
@@ -1080,11 +1095,11 @@ function renderSheet(){
     var inCart=state.cart[pp.id]||0,avail=pp.stock-inCart;
     var opt=function(n,label,price){var dis=n>avail;
       return '<button class="pickopt'+(dis?' dis':'')+'" '+(dis?'disabled':'data-act="pickadd" data-id="'+pp.id+'" data-n="'+n+'"')+'><span>'+label+'</span><b>'+money(price)+'</b></button>';};
-    var rows=opt(1,'1 '+esc(pp.name),single(pp));
-    state.deals.filter(function(d){return (d.type||'set')==='set'&&d.price[md]!=null&&d.items.length===1&&d.items[0].pid===pp.id;})
+    var rows=(md==='hh'&&avail>=2)?opt(1,'BOGO: 2 '+esc(pp.name)+' (2nd free)',single(pp)):opt(1,'1 '+esc(pp.name),single(pp));
+    state.deals.filter(function(d){return !d.bogo&&(d.type||'set')==='set'&&d.price[md]!=null&&d.items.length===1&&d.items[0].pid===pp.id;})
       .sort(function(a,b){return a.items[0].qty-b.items[0].qty;})
       .forEach(function(d){rows+=opt(d.items[0].qty,d.items[0].qty+' for '+moneyShort(d.price[md]),d.price[md]);});
-    var bun=state.deals.filter(function(d){return (d.type||'set')==='set'&&d.name&&d.price[md]!=null&&d.items.length>1&&d.items.some(function(it){return it.pid===pp.id;})&&d.items.every(function(it){return prod(it.pid);});})
+    var bun=state.deals.filter(function(d){return !d.bogo&&(d.type||'set')==='set'&&d.name&&d.price[md]!=null&&d.items.length>1&&d.items.some(function(it){return it.pid===pp.id;})&&d.items.every(function(it){return prod(it.pid);});})
       .map(function(d){return '<button class="pickopt bun" data-act="pickbundle" data-id="'+d.id+'"><span>'+esc(d.name)+'<small>'+d.items.map(function(it){return esc(prod(it.pid).name);}).join(' + ')+'</small></span><b>'+money(d.price[md])+'</b></button>';}).join('');
     h='<h3>'+esc(pp.name)+'</h3><div class="note">'+(avail<=0?'Sold out. Fix the count in Settings if that is wrong.':avail+' left'+(inCart?' &middot; '+inCart+' already in this order':''))+'</div>'+
       '<div class="picklist">'+rows+'</div>'+(bun?'<div class="lbl">Bundles with this item</div><div class="picklist">'+bun+'</div>':'')+
@@ -1132,9 +1147,11 @@ document.addEventListener('click',function(e){
     case 'hhdismiss':state.hhDismissDay=today();save();renderBanner();break;
     case 'add':if(addToCart(id,1)){afterCart();}else render();break;
     case 'pick':ui.pickId=id;ui.sheet='pick';renderSheet();break;
-    case 'pickadd':ui.sheet=null;if(addToCart(id,parseInt(el.getAttribute('data-n'),10))){afterCart();}else render();break;
+    case 'pickadd':ui.sheet=null;var pn=parseInt(el.getAttribute('data-n'),10);
+      if(state.mode==='hh'){var pp2=prod(id),av2=pp2?pp2.stock-(state.cart[id]||0):0;if(av2>=pn*2)pn=pn*2;else toast('Only 1 left: added 1. Use Adjust price for half off.');}
+      if(addToCart(id,pn)){afterCart();}else render();break;
     case 'pickbundle':ui.sheet=null;var pb=state.deals.filter(function(x){return x.id===id;})[0];
-      if(pb){var need={};pb.items.forEach(function(it){need[it.pid]=(need[it.pid]||0)+it.qty;});
+      if(pb){var need={},mul=state.mode==='hh'?2:1;pb.items.forEach(function(it){need[it.pid]=(need[it.pid]||0)+it.qty*mul;});
         var short=Object.keys(need).filter(function(k){var p=prod(k);return !p||(state.cart[k]||0)+need[k]>p.stock;});
         if(short.length){toast('Not enough '+(prod(short[0])?prod(short[0]).name:'stock')+' for '+pb.name);render();break;}
         Object.keys(need).forEach(function(k){state.cart[k]=(state.cart[k]||0)+need[k];});}
@@ -1142,7 +1159,7 @@ document.addEventListener('click',function(e){
     case 'addn':if(addToCart(id,parseInt(el.getAttribute('data-n'),10))){afterCart();}else render();break;
     case 'addbundle':
       var d=state.deals.filter(function(x){return x.id===id;})[0];var ok=true;
-      d.items.forEach(function(it){if(ok&&!addToCart(it.pid,it.qty))ok=false;});afterCart();break;
+      var mul2=state.mode==='hh'?2:1;d.items.forEach(function(it){if(ok&&!addToCart(it.pid,it.qty*mul2))ok=false;});afterCart();break;
     case 'inc':if(addToCart(id,1)){afterCart();}else render();break;
     case 'dec':state.cart[id]=(state.cart[id]||0)-1;if(state.cart[id]<=0)delete state.cart[id];afterCart();break;
     case 'pay':state.pay=el.getAttribute('data-m');ui.tender=null;ui.tenderExact=false;save();render();break;
