@@ -535,6 +535,11 @@ function migrate(s){
     s.deals=s.deals.concat(add);
     s.patch22=true;
   }
+  // Nov 13 #3: catnip toys excluded from BOGO.
+  if(!s.patch23){
+    s.deals=s.deals.filter(function(d){return !(d.bogo&&d.items.length===1&&/catnip/i.test((s.products.filter(function(p){return p.id===d.items[0].pid;})[0]||{}).name||''));});
+    s.patch23=true;
+  }
   s.v=2;
   return s;
 }
@@ -1095,7 +1100,7 @@ function renderSheet(){
     var inCart=state.cart[pp.id]||0,avail=pp.stock-inCart;
     var opt=function(n,label,price){var dis=n>avail;
       return '<button class="pickopt'+(dis?' dis':'')+'" '+(dis?'disabled':'data-act="pickadd" data-id="'+pp.id+'" data-n="'+n+'"')+'><span>'+label+'</span><b>'+money(price)+'</b></button>';};
-    var rows=(md==='hh'&&avail>=2)?opt(1,'BOGO: 2 '+esc(pp.name)+' (2nd free)',single(pp)):opt(1,'1 '+esc(pp.name),single(pp));
+    var rows=(md==='hh'&&avail>=2&&state.deals.some(function(d){return d.bogo&&d.items.length===1&&d.items[0].pid===pp.id;}))?opt(1,'BOGO: 2 '+esc(pp.name)+' (2nd free)',single(pp)):opt(1,'1 '+esc(pp.name),single(pp));
     state.deals.filter(function(d){return !d.bogo&&(d.type||'set')==='set'&&d.price[md]!=null&&d.items.length===1&&d.items[0].pid===pp.id;})
       .sort(function(a,b){return a.items[0].qty-b.items[0].qty;})
       .forEach(function(d){rows+=opt(d.items[0].qty,d.items[0].qty+' for '+moneyShort(d.price[md]),d.price[md]);});
@@ -1148,7 +1153,8 @@ document.addEventListener('click',function(e){
     case 'add':if(addToCart(id,1)){afterCart();}else render();break;
     case 'pick':ui.pickId=id;ui.sheet='pick';renderSheet();break;
     case 'pickadd':ui.sheet=null;var pn=parseInt(el.getAttribute('data-n'),10);
-      if(state.mode==='hh'){var pp2=prod(id),av2=pp2?pp2.stock-(state.cart[id]||0):0;if(av2>=pn*2)pn=pn*2;else toast('Only 1 left: added 1. Use Adjust price for half off.');}
+      var hasBogo=state.deals.some(function(d){return d.bogo&&d.items.length===1&&d.items[0].pid===id;});
+      if(state.mode==='hh'&&hasBogo){var pp2=prod(id),av2=pp2?pp2.stock-(state.cart[id]||0):0;if(av2>=pn*2)pn=pn*2;else toast('Only 1 left: added 1. Use Adjust price for half off.');}
       if(addToCart(id,pn)){afterCart();}else render();break;
     case 'pickbundle':ui.sheet=null;var pb=state.deals.filter(function(x){return x.id===id;})[0];
       if(pb){var need={},mul=state.mode==='hh'?2:1;pb.items.forEach(function(it){need[it.pid]=(need[it.pid]||0)+it.qty*mul;});
